@@ -35,30 +35,12 @@ try:
     from apex.parallel import DistributedDataParallel as DDP
     from apex import amp
     USE_APEX = True
+    USE_NATIVE_AMP = False
 except Exception:
-    from contextlib import contextmanager
+    from torch.cuda.amp import autocast, GradScaler
     from torch.nn.parallel import DistributedDataParallel as DDP
-
-    class _AmpFallback(object):
-        @staticmethod
-        def initialize(net, optimizer, opt_level='O0', verbosity=0):
-            return net, optimizer
-
-        @staticmethod
-        @contextmanager
-        def scale_loss(loss, optimizer):
-            yield loss
-
-        @staticmethod
-        def state_dict():
-            return {}
-
-        @staticmethod
-        def load_state_dict(state):
-            return None
-
-    amp = _AmpFallback()
     USE_APEX = False
+    USE_NATIVE_AMP = True
 
 # MODULES
 from dataloaders.kitti_loader import KittiDepth
@@ -186,7 +168,11 @@ def train(gpu, args):
     if gpu == 0:
         print(emoji.emojize('Prepare optimizer... :writing_hand:', variant="emoji_type"))
     optimizer, scheduler = make_optimizer_scheduler(args, net)
-    net, optimizer = amp.initialize(net, optimizer, opt_level='O0', verbosity=0)
+    scaler = None
+    if USE_APEX:
+        net, optimizer = amp.initialize(net, optimizer, opt_level='O0', verbosity=0)
+    elif USE_NATIVE_AMP:
+        scaler = GradScaler()
 
     # IF RESUME
     if gpu == 0:
@@ -195,7 +181,10 @@ def train(gpu, args):
                 try:
                     optimizer.load_state_dict(checkpoint['optimizer'])
                     scheduler.load_state_dict(checkpoint['scheduler'])
-                    amp.load_state_dict(checkpoint['amp'])
+                    if USE_APEX:
+                        amp.load_state_dict(checkpoint['amp'])
+                    elif USE_NATIVE_AMP and 'amp' in checkpoint:
+                        scaler.load_state_dict(checkpoint['amp'])
                     args.defrost()
                     args.start_epoch = checkpoint['epoch'] + 1
                     args.log_itr = checkpoint['log_itr']
@@ -274,13 +263,21 @@ def train(gpu, args):
         for batch, sample in enumerate(loader_train):
             sample = {k: value.cuda(gpu) for k, value in sample.items() if torch.is_tensor(value)}
 
-            output = net(sample)
+            if USE_NATIVE_AMP:
+                with autocast():
+                    output = net(sample)
+                    loss_sum, loss_val = loss(output['results'], sample['gt'])
+                scaler.scale(loss_sum).backward()
+                scaler.step(optimizer)
+                scaler.update()
+            else:
+                output = net(sample)
 
-            # LOSS
-            loss_sum, loss_val = loss(output['results'], sample['gt'])
-            with amp.scale_loss(loss_sum, optimizer) as scaled_loss:
-                scaled_loss.backward()
-            optimizer.step()
+                # LOSS
+                loss_sum, loss_val = loss(output['results'], sample['gt'])
+                with amp.scale_loss(loss_sum, optimizer) as scaled_loss:
+                    scaled_loss.backward()
+                optimizer.step()
             optimizer.zero_grad()
 
             # METRIC
@@ -322,7 +319,11 @@ def train(gpu, args):
                     sample_val = {key: val.cuda(gpu) for key, val in sample_val.items()
                                   if val is not None}
 
-                    output_val = net(sample_val)
+                    if USE_NATIVE_AMP:
+                        with autocast():
+                            output_val = net(sample_val)
+                    else:
+                        output_val = net(sample_val)
 
                     # LOG
                     for depth, supervised, gt in zip(torch.chunk(output_val['results'][-1], batch_size, dim=0),
@@ -362,7 +363,7 @@ def train(gpu, args):
                             'net': net.module.state_dict(),
                             'optimizer': optimizer.state_dict(),
                             'scheduler': scheduler.state_dict(),
-                            'amp': amp.state_dict(),
+                            'amp': amp.state_dict() if USE_APEX else (scaler.state_dict() if USE_NATIVE_AMP else {}),
                             'epoch': epoch,
                             'log_itr': log_itr,
                             'args': args
@@ -374,7 +375,7 @@ def train(gpu, args):
                             'net': net.module.state_dict(),
                             'optimizer': optimizer.state_dict(),
                             'scheduler': scheduler.state_dict(),
-                            'amp': amp.state_dict(),
+                            'amp': amp.state_dict() if USE_APEX else (scaler.state_dict() if USE_NATIVE_AMP else {}),
                             'epoch': epoch,
                             'log_itr': log_itr,
                             'args': args
@@ -394,7 +395,7 @@ def train(gpu, args):
                 'net': net.module.state_dict(),
                 'optimizer': optimizer.state_dict(),
                 'scheduler': scheduler.state_dict(),
-                'amp': amp.state_dict(),
+                'amp': amp.state_dict() if USE_APEX else (scaler.state_dict() if USE_NATIVE_AMP else {}),
                 'epoch': epoch,
                 'log_itr': log_itr,
                 'args': args

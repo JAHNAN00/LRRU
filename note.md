@@ -75,11 +75,39 @@
   - `no_multiprocessing: True`
   - `record_by_wandb_online: False`
   - `epochs: 45` 作为最大上限
+  - 提前开启按 epoch 验证，便于早停与跑偏监控
 - 当前初始 batch 设定：
   - Mini: `8`
   - Tiny: `4`
   - Small: `2`
   - Base: `1`
+- 实测补充：在纯 FP32 回退下，Mini 的 `batch_size=8` 会于 epoch 0 中段 OOM；随后已升级为原生 `torch.cuda.amp` 回退，并重新测试更高 batch 的可行性。
+
+## Mini 训练探索记录（2026-04-21）
+- 目标：在单卡 2080 Ti 11GB 上验证 `LRRU-Mini` 从头训练的可行性，并估计真实训练耗时。
+- 第 1 次尝试：
+  - 配置：`train_lrru_mini_auto_kitti.yml`
+  - 设定：纯 FP32 回退，`batch_size=8`
+  - 结果：训练能启动，但在 `epoch 0` 中段 OOM。
+  - 报错：`Tried to allocate 152.00 MiB ... 14.81 MiB free`
+- 第 2 次尝试：
+  - 设定：纯 FP32 回退，`batch_size=4`
+  - 结果：可稳定训练，loss 快速下降，无立即跑偏迹象。
+  - 问题：吞吐偏低，整体训练时间过长。
+- 第 3 次尝试：
+  - 改动：将无 Apex 回退从纯 FP32 升级为原生 `torch.cuda.amp`
+  - 结果：首次直接开启 AMP 时，`DCNv2` 后处理算子报半精度类型不兼容。
+  - 报错：`RuntimeError: expected scalar type Float but found Half`
+- 第 4 次尝试：
+  - 改动：在 `model/model_dcnv2.py` 中将 4 次 `Post_process` 的 `DCNv2` 调用输入强制转回 `float32`，仅让该自定义算子避开半精度。
+  - 设定：原生 AMP 回退，`batch_size=8`
+  - 结果：训练可稳定启动，不再 OOM。
+  - 显存：约 `6.7 GB`
+  - 速度：日志显示约 `9~10.5 samples/s`，折算约 `1.1~1.3 it/s`
+  - 结论：AMP + 局部 `float32` 兼容方案有效，明显优于纯 FP32。
+- 当前状态：
+  - 用户在首个验证结果出现前手动中断训练。
+  - 因此本轮未产出可与论文直接对比的自训练 `RMSE/MAE` 结果。
 
 ## DCNv2 编译情况（2026-04-20）
 - 已恢复 `model/dcn_v2.py` 为原生 `_ext` 依赖（不再使用 Python fallback）。

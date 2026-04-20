@@ -354,7 +354,7 @@ class Model(nn.Module, ABC):
             lidar = lidar
         lidar = lidar.detach()
         weight0, offset0 = self.weight_offset0(lidar, c4_up)
-        output = self.Post_process(lidar, weight0, offset0)
+        output = self.Post_process(lidar.float(), weight0.float(), offset0.float())
         depth_predictions.append(output)
 
         dc3 = self.layer3d(c4)
@@ -368,7 +368,7 @@ class Model(nn.Module, ABC):
             output = output
         output = output.detach()
         weight1, offset1 = self.weight_offset1(output, c3_up)
-        output = self.Post_process(output, weight1, offset1)
+        output = self.Post_process(output.float(), weight1.float(), offset1.float())
         depth_predictions.append(output)
 
         dc2 = self.layer2d(c3)
@@ -382,7 +382,7 @@ class Model(nn.Module, ABC):
             output = output
         output = output.detach()
         weight2, offset2 = self.weight_offset2(output, c2_up)
-        output = self.Post_process(output, weight2, offset2)
+        output = self.Post_process(output.float(), weight2.float(), offset2.float())
         depth_predictions.append(output)
 
         dc1 = self.layer1d(c2)
@@ -397,7 +397,7 @@ class Model(nn.Module, ABC):
             output = output
         output = output.detach()
         weight3, offset3 = self.weight_offset3(output, c0)
-        output = self.Post_process(output, weight3, offset3)
+        output = self.Post_process(output.float(), weight3.float(), offset3.float())
 
         depth_predictions.append(output)
 
