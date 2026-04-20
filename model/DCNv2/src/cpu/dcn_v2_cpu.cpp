@@ -72,17 +72,8 @@ dcn_v2_cpu_forward(const at::Tensor &input,
         auto mask_n = mask.select(0, b);
         auto output_n = output.select(0, b);
 
-        // Do Bias first:
-        // M,N,K are dims of matrix A and B
-        // (see http://docs.nvidia.com/cuda/cublas/#cublas-lt-t-gt-gemm)
-        // (N x 1) (1 x M)
-        long m_ = channels_out;
-        long n_ = height_out * width_out;
-        long k_ = 1;
-        THFloatBlas_gemm('t', 'n', n_, m_, k_, 1.0f,
-                         ones.contiguous().data<scalar_t>(), k_,
-                         bias.contiguous().data<scalar_t>(), k_, 0.0f,
-                         output_n.data<scalar_t>(), n_);
+        auto output_n_2d = bias.view({channels_out, 1}).mm(
+            ones.view({1, height_out * width_out}));
 
         modulated_deformable_im2col_cpu(input_n.data<scalar_t>(),
                                          offset_n.data<scalar_t>(),
@@ -93,15 +84,9 @@ dcn_v2_cpu_forward(const at::Tensor &input,
                                          deformable_group,
                                          columns.data<scalar_t>());
 
-        //(k * m)  x  (m * n)
-        // Y = WC
-        long m = channels_out;
-        long n = height_out * width_out;
-        long k = channels * kernel_h * kernel_w;
-        THFloatBlas_gemm('n', 'n', n, m, k, 1.0f,
-                         columns.data<scalar_t>(), n,
-                         weight.data<scalar_t>(), k, 1.0f,
-                         output_n.data<scalar_t>(), n);
+        output_n_2d = output_n_2d +
+            weight.view({channels_out, channels * kernel_h * kernel_w}).mm(columns);
+        output_n.copy_(output_n_2d.view({channels_out, height_out, width_out}));
     }
     return output;
 }
@@ -169,14 +154,11 @@ std::vector<at::Tensor> dcn_v2_cpu_backward(const at::Tensor &input,
         auto grad_offset_n = grad_offset.select(0, b);
         auto grad_mask_n = grad_mask.select(0, b);
 
-        long m = channels * kernel_h * kernel_w;
-        long n = height_out * width_out;
-        long k = channels_out;
+        const long m = channels * kernel_h * kernel_w;
+        const long n = height_out * width_out;
+        auto grad_output_n_2d = grad_output_n.view({channels_out, n});
 
-        THFloatBlas_gemm('n', 't', n, m, k, 1.0f,
-                         grad_output_n.data<scalar_t>(), n,
-                         weight.data<scalar_t>(), m, 0.0f,
-                         columns.data<scalar_t>(), n);
+        columns.copy_(weight.view({channels_out, m}).t().mm(grad_output_n_2d));
 
         // gradient w.r.t. input coordinate data
         modulated_deformable_col2im_coord_cpu(columns.data<scalar_t>(),
@@ -209,22 +191,8 @@ std::vector<at::Tensor> dcn_v2_cpu_backward(const at::Tensor &input,
                                          dilation_h, dilation_w, deformable_group,
                                          columns.data<scalar_t>());
 
-        long m_ = channels_out;
-        long n_ = channels * kernel_h * kernel_w;
-        long k_ = height_out * width_out;
-
-        THFloatBlas_gemm('t', 'n', n_, m_, k_, 1.0f,
-                         columns.data<scalar_t>(), k_,
-                         grad_output_n.data<scalar_t>(), k_, 1.0f,
-                         grad_weight.data<scalar_t>(), n_);
-
-        // gradient w.r.t. bias
-        // long m_ = channels_out;
-        // long k__ = height_out * width_out;
-        THFloatBlas_gemv('t', k_, m_, 1.0f,
-                         grad_output_n.data<scalar_t>(), k_,
-                         ones.data<scalar_t>(), 1, 1.0f,
-                         grad_bias.data<scalar_t>(), 1);
+        grad_weight.add_(grad_output_n_2d.mm(columns.t()).view_as(grad_weight));
+        grad_bias.add_(grad_output_n_2d.sum(1));
     }
 
     return {
