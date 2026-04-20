@@ -8,7 +8,7 @@ cudnn_deterministic: False
 cudnn_benchmark: True
 
 # Dataset
-data_folder: '/home/temp_user/kitti_depth'
+data_folder: '/home/an/Desktop/LRRU/data'
 dataset: ['dep', 'gt', 'rgb']
 val: 'select'
 grid_spot: True
@@ -54,7 +54,7 @@ prob: 0.5
 bc: 4
 model: 'model_dcnv2'
 test_dir: './pretrained/LRRU_Tiny'
-test_model: './pretrained/LRRU_Tiny/LRRU_Tiny.pt'
+test_model: './pretrained/LRRU_Tiny.pt'
 
 # Summary
 num_summary: 6

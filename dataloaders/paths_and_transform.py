@@ -8,106 +8,125 @@ import torchvision.transforms.functional as TF
 glob_dep, glob_gt, glob_K, glob_rgb = None, None, None, None
 get_rgb_paths, get_K_paths = None, None
 
+
+def _resolve_data_roots(data_folder):
+    data_folder = os.path.abspath(data_folder)
+
+    depth_root_candidate = os.path.join(data_folder, 'kitti_depth')
+    raw_root_candidate = os.path.join(data_folder, 'kitti_raw')
+
+    if os.path.isdir(depth_root_candidate):
+        depth_root = depth_root_candidate
+        raw_root = raw_root_candidate
+    else:
+        depth_root = data_folder
+        raw_root = os.path.join(os.path.dirname(data_folder), 'kitti_raw')
+
+    return depth_root, raw_root
+
+
+def _map_paths_from_dep(dep_path, depth_root, raw_root):
+    parts = dep_path.split(os.sep)
+    split = parts[-6]
+    drive = parts[-5]
+    cam = parts[-2]
+    fname = parts[-1]
+    day = '_'.join(drive.split('_')[:3])
+
+    gt_path = os.path.join(
+        depth_root,
+        'data_depth_annotated',
+        split,
+        drive,
+        'proj_depth',
+        'groundtruth',
+        cam,
+        fname,
+    )
+    rgb_path = os.path.join(raw_root, day, drive, cam, 'data', fname)
+    k_path = os.path.join(raw_root, day, 'calib_cam_to_cam.txt')
+
+    return gt_path, rgb_path, k_path
+
 def get_kittipaths(split, args):
     global glob_dep, glob_gt, glob_K, glob_rgb
     global get_rgb_paths, get_K_paths
 
+    depth_root, raw_root = _resolve_data_roots(args.data_folder)
+
     if split == 'train':
         glob_dep = os.path.join(
-            args.data_folder,
-            'train/*_sync/proj_depth/velodyne_raw/image_0[2,3]/*.png'
+            depth_root,
+            'data_depth_velodyne/train/*_sync/proj_depth/velodyne_raw/image_0[2,3]/*.png'
         )
-        glob_gt = os.path.join(
-            args.data_folder,
-            'train/*_sync/proj_depth/groundtruth/image_0[2,3]/*.png'
-        )
-        def get_rgb_paths(p):
-            if 'image_02' in p:
-                tmp = p.replace('proj_depth/velodyne_raw/image_02', 'image_02/data')
-            elif 'image_03' in p:
-                tmp = p.replace('proj_depth/velodyne_raw/image_03', 'image_03/data')
-            else:
-                raise ValueError('ERROR')
-            return tmp
-        def get_K_paths(p):
-            return p.split('proj_depth')[0] + 'calibration/calib_cam_to_cam.txt'
+        glob_gt = None
     elif split == 'val':
         if args.val == 'full':
             glob_dep = os.path.join(
-                args.data_folder,
-                'val/*_sync/proj_depth/velodyne_raw/image_0[2,3]/*.png'
+                depth_root,
+                'data_depth_velodyne/val/*_sync/proj_depth/velodyne_raw/image_0[2,3]/*.png'
             )
-            glob_gt = os.path.join(
-                args.data_folder,
-                'val/*_sync/proj_depth/groundtruth/image_0[2,3]/*.png'
-            )
-            def get_rgb_paths(p):
-                if 'image_02' in p:
-                    tmp = p.replace('proj_depth/velodyne_raw/image_02', 'image_02/data')
-                elif 'image_03' in p:
-                    tmp = p.replace('proj_depth/velodyne_raw/image_03', 'image_03/data')
-                else:
-                    raise ValueError('ERROR')
-                return tmp
-            def get_K_paths(p):
-                return p.split('proj_depth')[0] + 'calibration/calib_cam_to_cam.txt'
+            glob_gt = None
         elif args.val == 'select':
             glob_dep = os.path.join(
-                args.data_folder,
-                'depth_selection/val_selection_cropped/velodyne_raw/*.png'
+                depth_root,
+                'data_depth_selection/val_selection_cropped/velodyne_raw/*.png'
             )
             glob_gt = os.path.join(
-                args.data_folder,
-                'depth_selection/val_selection_cropped/groundtruth_depth/*.png'
+                depth_root,
+                'data_depth_selection/val_selection_cropped/groundtruth_depth/*.png'
             )
             glob_K = os.path.join(
-                args.data_folder,
-                'depth_selection/val_selection_cropped/intrinsics/*.txt'
+                depth_root,
+                'data_depth_selection/val_selection_cropped/intrinsics/*.txt'
             )
             glob_rgb = os.path.join(
-                args.data_folder,
-                'depth_selection/val_selection_cropped/image/*.png'
+                depth_root,
+                'data_depth_selection/val_selection_cropped/image/*.png'
             )
     elif split == "test_completion":
 
         glob_dep = os.path.join(
-            args.data_folder,
-            'depth_selection/test_depth_completion_anonymous/velodyne_raw/*.png'
+            depth_root,
+            'data_depth_selection/test_depth_completion_anonymous/velodyne_raw/*.png'
         )
         glob_gt = None
         glob_K = os.path.join(
-            args.data_folder,
-            'depth_selection/test_depth_completion_anonymous/intrinsics/*.txt'
+            depth_root,
+            'data_depth_selection/test_depth_completion_anonymous/intrinsics/*.txt'
         )
         glob_rgb = os.path.join(
-            args.data_folder,
-            'depth_selection/test_depth_completion_anonymous/image/*.png'
+            depth_root,
+            'data_depth_selection/test_depth_completion_anonymous/image/*.png'
         )
     elif split == "test_prediction":
 
         glob_dep, glob_gt = None, None
         glob_K = os.path.join(
-            args.data_folder,
-            'depth_selection/test_depth_prediction_anonymous/intrinsics/*.txt'
+            depth_root,
+            'data_depth_selection/test_depth_prediction_anonymous/intrinsics/*.txt'
         )
         glob_rgb = os.path.join(
-            args.data_folder,
-            'depth_selection/test_depth_prediction_anonymous/image/*.png'
+            depth_root,
+            'data_depth_selection/test_depth_prediction_anonymous/image/*.png'
         )
 
     else:
         raise ValueError("Unrecognized split " + str(split))
 
-    if glob_gt is not None:
-        # train or val-full or val-select
+    if split == 'train' or (split == 'val' and args.val == 'full'):
+        # train or val-full
+        paths_dep = sorted(glob.glob(glob_dep))
+        mapped = [_map_paths_from_dep(p, depth_root, raw_root) for p in paths_dep]
+        paths_gt = [m[0] for m in mapped]
+        paths_rgb = [m[1] for m in mapped]
+        paths_K = [m[2] for m in mapped]
+    elif glob_gt is not None:
+        # val-select
         paths_dep = sorted(glob.glob(glob_dep))
         paths_gt = sorted(glob.glob(glob_gt))
-        if split == 'train' or (split == 'val' and args.val == 'full'):
-            paths_rgb = [get_rgb_paths(p) for p in paths_dep]
-            paths_K = [get_K_paths(p) for p in paths_dep]
-        else:
-            paths_rgb = sorted(glob.glob(glob_rgb))
-            paths_K = sorted(glob.glob(glob_K))
+        paths_rgb = sorted(glob.glob(glob_rgb))
+        paths_K = sorted(glob.glob(glob_K))
     else:
         # test only has dep or rgb
         paths_K = sorted(glob.glob(glob_K))
@@ -255,4 +274,3 @@ def kittitransforms(split, args, dep, gt, K, rgb,
     dep = dep_noise
 
     return dep, gt, K, rgb
-

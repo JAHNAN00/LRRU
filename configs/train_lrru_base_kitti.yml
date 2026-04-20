@@ -8,7 +8,7 @@ cudnn_deterministic: False
 cudnn_benchmark: True
 
 # Dataset
-data_folder: '/home/temp_user/kitti_depth'
+data_folder: '/home/an/Desktop/LRRU/data'
 dataset: ['dep', 'gt', 'rgb']
 val: 'select'
 grid_spot: True
@@ -75,5 +75,4 @@ vis_step: 1000
 record_by_wandb_online: True
 test_record_by_wandb_online: False
 save_result_only: False
-
 

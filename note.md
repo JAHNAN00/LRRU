@@ -24,12 +24,65 @@
 - 关键依赖：`opencv-python-headless`、`yacs`、`wandb`、`emoji`、`tensorboard` 等已安装。
 - Apex：已尝试安装，但与当前 `torch==1.7.1` 的 API 有兼容问题；当前训练脚本通过回退逻辑可在无 Apex 情况下运行 dry-run。
 
+## 最新进展（2026-04-20）
+- 已完成数据链接：
+  - `data/kitti_depth -> /media/an/4T/datasets/kitti_depth`
+  - `data/kitti_raw -> /media/an/4T/datasets/kitti_raw`
+- 已适配代码读取逻辑（`dataloaders/paths_and_transform.py`）：
+  - 训练/`val full`：从 `data_depth_velodyne` 读稀疏深度，从 `data_depth_annotated` 读 GT，从 `kitti_raw` 读 RGB 与标定。
+  - `val select`/`test_*`：路径前缀修正为 `data_depth_selection`。
+- 已更新 KITTI 配置文件 `data_folder` 为：`/home/an/Desktop/LRRU/data`。
+- 预训练权重验证（不训练直接测试）已跑通：
+  - 命令：`mamba run -n LRRU python val.py -c val_lrru_mini_kitti.yml`
+  - 权重：`./pretrained/LRRU_Mini.pt`
+  - 结果文件：`pretrained/LRRU_Mini/test/result_metric.txt`
+  - 汇总指标：`RMSE=0.8063`、`MAE=0.2102`、`iRMSE=0.0023`、`iMAE=0.0009`
+  - 单位换算后与论文/README 的 LRRU-Mini（KITTI val）一致：`806.3 mm / 210.2 mm / 2.3 / 0.9`。
+
+## DCNv2 编译情况（2026-04-20）
+- 已恢复 `model/dcn_v2.py` 为原生 `_ext` 依赖（不再使用 Python fallback）。
+- 编译器按本机经验固定为 `gcc-10/g++-10`，在 `LRRU` 环境内编译通过。
+- 编译命令（在 `model/DCNv2` 目录）：
+  - `mamba run -n LRRU env CC=/usr/bin/gcc-10 CXX=/usr/bin/g++-10 CUDAHOSTCXX=/usr/bin/g++-10 TORCH_CUDA_ARCH_LIST=7.5 python setup.py build develop`
+- 兼容改动范围仅在 `model/DCNv2` 目录内（旧 TH/THC 接口替换为当前可编译接口，不改项目外部调用接口）。
+- 项目侧可用性验证：已用 dry-run 跑通 `train_apex.py` 与 `val.py`。
+- 备注：`model/DCNv2/testcuda.py` 的严格 gradcheck 在本机仍可能报 Jacobian mismatch，但不影响当前项目 dry-run 训练/验证链路。
+
 ## 运行约定
 - 后续在本仓库执行训练/验证/脚本时，统一使用 `LRRU` 环境。
 - 推荐命令形式：`mamba run -n LRRU python <script>.py ...`。
 - 已验证 dry-run 命令：
   - `mamba run -n LRRU python train_apex.py -c train_lrru_dryrun.yml`
   - `mamba run -n LRRU python val.py -c val_lrru_dryrun.yml`
+
+## 距离真实项目跑起来还差什么
+- 目前已具备：环境、依赖、DCNv2 编译、真实 KITTI 数据链接、预训练权重验证流程。
+- 当前可直接执行：
+  - 预训练验证：`python val.py -c val_lrru_mini_kitti.yml`
+  - 训练入口：`python train_apex.py -c train_lrru_mini_kitti.yml`
+- 若要做完整训练复现：主要是确认显存/批大小设置与 `wandb` 登录策略。
+
+## 数据目录与格式要求（按代码读取规则）
+- 通用要求：
+  - 深度图使用 **16-bit png**（读取后按 `/256.0` 还原到米）。
+  - RGB 使用常规 `png`。
+  - 内参文件为文本；训练/val-full 用 `calib_cam_to_cam.txt`，val-select/test 用每帧一个 `.txt`。
+- 训练集（`split=train`）最少结构：
+  - `data_folder/kitti_depth/data_depth_velodyne/train/*_sync/proj_depth/velodyne_raw/image_02/*.png`
+  - `data_folder/kitti_depth/data_depth_annotated/train/*_sync/proj_depth/groundtruth/image_02/*.png`
+  - `data_folder/kitti_raw/<date>/*_sync/image_02/data/*.png`
+  - `data_folder/kitti_raw/<date>/calib_cam_to_cam.txt`
+  - 也支持 `image_03` 对应路径。
+- 验证集（`split=val`）：
+  - `val: full` 时目录与训练同构，根路径改为 `data_folder/kitti_depth/...` 与 `data_folder/kitti_raw/...`
+  - `val: select` 时需要：
+    - `data_folder/kitti_depth/data_depth_selection/val_selection_cropped/velodyne_raw/*.png`
+    - `data_folder/kitti_depth/data_depth_selection/val_selection_cropped/groundtruth_depth/*.png`
+    - `data_folder/kitti_depth/data_depth_selection/val_selection_cropped/image/*.png`
+    - `data_folder/kitti_depth/data_depth_selection/val_selection_cropped/intrinsics/*.txt`
+- 测试集（可选）：
+  - completion：`data_depth_selection/test_depth_completion_anonymous/{velodyne_raw,image,intrinsics}`
+  - prediction：`data_depth_selection/test_depth_prediction_anonymous/{image,intrinsics}`
 
 ## 实验计划
 - [ ] 先确认 `DCNv2` 能成功编译。
