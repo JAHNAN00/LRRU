@@ -302,7 +302,8 @@ def train(gpu, args):
                 pbar.update(loader_train.batch_size * args.num_gpus)
 
             # VAL
-            if  epoch > args.val_epoch:
+            should_validate = epoch >= args.val_epoch and batch == len(loader_train) - 1
+            if should_validate:
 
                 # ENVIRONMENT SETTING
                 torch.set_grad_enabled(False)
@@ -353,10 +354,7 @@ def train(gpu, args):
 
                 # SAVE CHECKPOINT
                 if gpu == 0:
-                    tmp = args.val_iters // (loader_train.batch_size * args.num_gpus)
-                    if (epoch <= args.val_epoch and batch == len(loader_train) - 1) or (epoch > args.val_epoch
-                        and batch + 1 == (len(loader_train) // tmp) * tmp):
-                        writer_val.save(epoch, batch + 1, sample_val, output_val)
+                    writer_val.save(epoch, batch + 1, sample_val, output_val)
 
                     if val_metric_rmse < best_metric_rmse:
                         best_metric_rmse = val_metric_rmse

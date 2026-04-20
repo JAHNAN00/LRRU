@@ -1,2 +1,8 @@
 # Local dataset links and data files
 /data/
+
+# Local build and cache artifacts
+__pycache__/
+*/__pycache__/
+model/DCNv2/build/
+model/DCNv2/DCNv2.egg-info/

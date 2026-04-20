@@ -39,6 +39,48 @@
   - 汇总指标：`RMSE=0.8063`、`MAE=0.2102`、`iRMSE=0.0023`、`iMAE=0.0009`
   - 单位换算后与论文/README 的 LRRU-Mini（KITTI val）一致：`806.3 mm / 210.2 mm / 2.3 / 0.9`。
 
+## 预训练验证结果总表（2026-04-20）
+- 数据集：KITTI `val_selection_cropped`，`tta: False`
+- 结论：四个尺寸的预训练权重在本机复现结果与 README/论文给出的 KITTI val 指标完全对齐。
+- LRRU-Mini：
+  - 实测：`RMSE=806.3 mm`、`MAE=210.2 mm`、`iRMSE=2.3`、`iMAE=0.9`
+  - README/论文：`806.3 / 210.0 / 2.3 / 0.9`
+  - 结论：一致（MAE 仅四舍五入差异）
+  - 运行时间：`34.8 s`
+- LRRU-Tiny：
+  - 实测：`RMSE=763.8 mm`、`MAE=198.9 mm`、`iRMSE=2.1`、`iMAE=0.8`
+  - README/论文：`763.8 / 198.9 / 2.1 / 0.8`
+  - 结论：完全一致
+  - 运行时间：`44.4 s`
+- LRRU-Small：
+  - 实测：`RMSE=745.3 mm`、`MAE=195.7 mm`、`iRMSE=2.0`、`iMAE=0.8`
+  - README/论文：`745.3 / 195.7 / 2.0 / 0.8`
+  - 结论：完全一致
+  - 运行时间：`71.0 s`
+- LRRU-Base：
+  - 实测：`RMSE=729.5 mm`、`MAE=188.8 mm`、`iRMSE=1.9`、`iMAE=0.8`
+  - README/论文：`729.5 / 188.8 / 1.9 / 0.8`
+  - 结论：完全一致
+  - 运行时间：`165.0 s`
+
+## 无人值守训练适配（2026-04-20）
+- 已修正 `train_apex.py` 中的验证触发逻辑：改为按 epoch 验证一次，避免原实现从 `val_epoch` 开始对每个训练 batch 都跑完整验证。
+- 已新增四个单卡自动训练配置：
+  - `train_lrru_mini_auto_kitti.yml`
+  - `train_lrru_tiny_auto_kitti.yml`
+  - `train_lrru_small_auto_kitti.yml`
+  - `train_lrru_base_auto_kitti.yml`
+- 自动训练配置统一策略：
+  - 单卡 `gpus: (0,)`
+  - `no_multiprocessing: True`
+  - `record_by_wandb_online: False`
+  - `epochs: 45` 作为最大上限
+- 当前初始 batch 设定：
+  - Mini: `8`
+  - Tiny: `4`
+  - Small: `2`
+  - Base: `1`
+
 ## DCNv2 编译情况（2026-04-20）
 - 已恢复 `model/dcn_v2.py` 为原生 `_ext` 依赖（不再使用 Python fallback）。
 - 编译器按本机经验固定为 `gcc-10/g++-10`，在 `LRRU` 环境内编译通过。
