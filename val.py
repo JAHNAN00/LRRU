@@ -100,6 +100,8 @@ def test(args):
             "file not found: {}".format(args.test_model)
 
         checkpoint_ = torch.load(args.test_model, map_location='cpu')
+        if isinstance(checkpoint_, dict) and 'net' in checkpoint_:
+            checkpoint_ = checkpoint_['net']
         model = remove_moudle(checkpoint_)
         key_m, key_u = net.load_state_dict(model, strict=True)
 

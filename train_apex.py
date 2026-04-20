@@ -31,8 +31,34 @@ from torch.utils.data.distributed import DistributedSampler
 # MULTI-GPU AND MIXED PRECISION
 import torch.multiprocessing as mp
 import torch.distributed as dist
-from apex.parallel import DistributedDataParallel as DDP
-from apex import amp
+try:
+    from apex.parallel import DistributedDataParallel as DDP
+    from apex import amp
+    USE_APEX = True
+except Exception:
+    from contextlib import contextmanager
+    from torch.nn.parallel import DistributedDataParallel as DDP
+
+    class _AmpFallback(object):
+        @staticmethod
+        def initialize(net, optimizer, opt_level='O0', verbosity=0):
+            return net, optimizer
+
+        @staticmethod
+        @contextmanager
+        def scale_loss(loss, optimizer):
+            yield loss
+
+        @staticmethod
+        def state_dict():
+            return {}
+
+        @staticmethod
+        def load_state_dict(state):
+            return None
+
+    amp = _AmpFallback()
+    USE_APEX = False
 
 # MODULES
 from dataloaders.kitti_loader import KittiDepth
@@ -90,7 +116,8 @@ def train(gpu, args):
         best_metric_rmse = 1e8
         best_metric_mae = 1e8
         import wandb
-        wandb.login()
+        if args.record_by_wandb_online:
+            wandb.login()
         if not args.resume:
             wandb.init(dir=rootPath, config=args, project=args.project_name)
             args.defrost()
@@ -180,7 +207,11 @@ def train(gpu, args):
                           'Use --save_full argument')
             del checkpoint
 
-    net = DDP(net)
+    if USE_APEX:
+        net = DDP(net)
+    else:
+        net = DDP(net, device_ids=[gpu], output_device=gpu,
+                  find_unused_parameters=True)
 
     # LOSSES
     if gpu == 0:

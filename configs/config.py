@@ -110,6 +110,7 @@ cfg.warm_up = False
 cfg.no_warm_up = True
 
 # Loss
+cfg.loss = ''
 cfg.loss_fixed = True
 cfg.partial_supervised_index = 0.0
 cfg.loss_ben = ''

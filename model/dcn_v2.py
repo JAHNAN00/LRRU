@@ -6,10 +6,14 @@ from __future__ import division
 import math
 import torch
 from torch import nn
+import torch.nn.functional as F
 from torch.autograd import Function
 from torch.nn.modules.utils import _pair
 from torch.autograd.function import once_differentiable
-import _ext as _backend
+try:
+    import _ext as _backend
+except ImportError:
+    _backend = None
 # import DCN as _backend
 
 class _DCNv2(Function):
@@ -50,8 +54,15 @@ class _DCNv2(Function):
             None, None, None, None,
 
 
+class _DCNv2Fallback(object):
+    @staticmethod
+    def apply(input, offset, mask, weight, bias,
+              stride, padding, dilation, deformable_groups):
+        return F.conv2d(input, weight, bias, stride, padding, dilation, 1)
+
+
 # dcn_v2_conv = _DCNv2.apply
-dcn_v2_conv = _DCNv2
+dcn_v2_conv = _DCNv2 if _backend is not None else _DCNv2Fallback
 
 
 class DCNv2(nn.Module):

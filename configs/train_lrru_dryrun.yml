@@ -1,0 +1,78 @@
+# Hardware
+seed: 1128
+gpus: (0, )
+port: 29011
+num_threads: 0
+no_multiprocessing: True
+cudnn_deterministic: False
+cudnn_benchmark: False
+
+# Dataset
+data_folder: './dryrun_data'
+dataset: ['dep', 'gt', 'rgb']
+val: 'select'
+grid_spot: True
+num_sample: 1000
+cut_mask: False
+max_depth: 80.0
+rgb_noise: 0.0
+noise: 0.0
+
+hflip: False
+colorjitter: False
+rotation: False
+resize: False
+normalize: True
+scale_depth: False
+
+val_h: 352
+val_w: 1216
+random_crop_height: 256
+random_crop_width: 1216
+train_bottom_crop: True
+train_random_crop: True
+val_bottom_crop: True
+val_random_crop: True
+test_bottom_crop: True
+test_random_crop: True
+
+# Network
+bc: 2
+prob: 0.1
+model: 'model_dcnv2'
+depth_norm: False
+dkn_residual: True
+summary_name: 'summary'
+
+# Training
+val_epoch: 99
+val_iters: 1
+log_itr: 1
+start_epoch: 0
+epochs: 1
+batch_size: 1
+
+# Loss
+loss: '1.0*L1+1.0*L2'
+
+# Optimizer
+lr: 1e-3
+optimizer: 'ADAMW'
+momentum: 0.9
+betas: (0.9, 0.999)
+epsilon: 1e-8
+weight_decay: 0.05
+
+# Scheduler
+scheduler: 'lambdaLR'
+decay: (1, )
+gamma: (1.0, )
+
+# Summary
+num_summary: 2
+
+# Logs
+vis_step: 1000
+record_by_wandb_online: False
+test_record_by_wandb_online: False
+save_result_only: False
