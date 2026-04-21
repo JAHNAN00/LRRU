@@ -6,3 +6,27 @@ __pycache__/
 */__pycache__/
 model/DCNv2/build/
 model/DCNv2/DCNv2.egg-info/
+model/DCNv2/*.so
+
+# Experiment logs and tracking artifacts
+wandb/
+run_logs/
+runs/
+events.out.tfevents.*
+*.log
+
+# Training checkpoints and exported weights
+*.pt
+*.pth
+*.ckpt
+*.onnx
+
+# Evaluation and generated outputs
+backup_code/
+result_metric.txt
+loss_*.txt
+metric_*.txt
+test/
+
+# Local pretrained and experiment directories
+pretrained/

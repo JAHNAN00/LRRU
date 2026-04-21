@@ -19,6 +19,8 @@ os.environ["MASTER_ADDR"] = 'localhost'
 os.environ["MASTER_PORT"] = str(config.port)
 if not config.record_by_wandb_online:
     os.environ["WANDB_MODE"] = 'dryrun'
+if config.wandb_disable_code:
+    os.environ["WANDB_DISABLE_CODE"] = 'true'
 
 # BASIC PACKAGES
 import time
@@ -227,7 +229,8 @@ def train(gpu, args):
 
     if gpu == 0:
         log_itr = args.log_itr
-        backup_source_code(args.save_dir + '/backup_code')
+        if args.backup_source_code:
+            backup_source_code(args.save_dir + '/backup_code')
         try:
             assert os.path.isdir(args.save_dir)
             os.makedirs(args.save_dir, exist_ok=True)
@@ -235,7 +238,10 @@ def train(gpu, args):
             os.makedirs(args.save_dir + '/val', exist_ok=True)
         except OSError:
             pass
-        print('=> Save backup source code and makedirs done')
+        if args.backup_source_code:
+            print('=> Save backup source code and makedirs done')
+        else:
+            print('=> Skip source code backup and makedirs done')
 
     # GO
     for epoch in range(args.start_epoch, args.epochs + 1):

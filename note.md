@@ -109,6 +109,43 @@
   - 用户在首个验证结果出现前手动中断训练。
   - 因此本轮未产出可与论文直接对比的自训练 `RMSE/MAE` 结果。
 
+## Mini 瓶颈剖析（2026-04-21）
+- 目标：判断 `LRRU-Mini` 单卡训练耗时接近 `2 小时/epoch` 时，主瓶颈是否来自 CPU。
+- profiling 脚本：`scripts/profile_mini_bottleneck.py`
+- 配置：`train_lrru_mini_auto_kitti.yml`，`batch_size=8`，原生 AMP 回退开启。
+- 单样本 `__getitem__` 拆分（24 个样本平均）：
+  - `read_raw`: `12.1 ms`
+  - `transform`: `48.0 ms`
+  - `outlier_removal`: `18.0 ms`
+  - `fill_in_fast(ipfill)`: `16.4 ms`
+  - `getitem_total`: `94.4 ms`
+- 结论：CPU 侧最重的是增强/裁剪，其次是 `outlier_removal + ipfill`，两者合计约占单样本 `70%+` 的取数时间。
+- DataLoader 吞吐（`batch_size=8`）：
+  - `workers=0`: `10.4 samples/s`
+  - `workers=2`: `15.3 samples/s`
+  - `workers=3`: `19.0 samples/s`
+  - `workers=4`: `17.8 samples/s`
+  - 结论：当前配置的 `num_threads=3` 已接近最优，继续加 worker 没有收益。
+- 去掉 `outlier_removal + ipfill` 后的纯 loader 吞吐：
+  - `workers=3~4` 可到约 `18~26 samples/s`
+  - 说明这两步确实有 CPU 成本，但在多 worker 下仍能被并行掩盖。
+- 纯 GPU 单步训练速度（复用同一 batch，隔离数据加载）：
+  - `AMP=True`: `0.689 s/step`，约 `11.6 samples/s`，峰值显存 `5.32 GB`
+  - `AMP=False`: `0.834 s/step`，约 `9.6 samples/s`，峰值显存 `8.65 GB`
+  - 结论：AMP 能带来约 `17%` 的单步提速，并显著降低显存占用。
+- 端到端训练速度（真实 DataLoader + 模型训练）：
+  - `workers=4`, `AMP=True`: `0.735 s/step`，约 `10.9 samples/s`
+  - 与纯 GPU `11.6 samples/s` 只差约 `6%`
+  - 结论：在 worker 设置合理时，训练主瓶颈不在 CPU，而在 GPU 侧前反传本身。
+- 额外观察：
+  - 若 `workers=0`，端到端训练吞吐会明显掉到约 `4.4 samples/s`。
+  - 说明 CPU 会在 worker 配置不当时成为瓶颈，但这不是当前 `num_threads=3` 配置下的主限制。
+- 综合判断：
+  - `LRRU-Mini` 当前约 `2 小时/epoch` 是正常量级，不是单纯 CPU 拖慢。
+  - 根因是：训练集规模大（约 `85898` 样本）+ 每 step 的 GPU 前反传本身就约 `0.69 s`。
+  - 按 `11.6 samples/s` 估算，`85898 / 11.6 ≈ 7405 s ≈ 2.06 小时/epoch`。
+  - 即使进一步优化 CPU 侧，整体 epoch 时间也只能小幅下降，无法从 `2 小时` 级别变成 `1 小时` 内。
+
 ## DCNv2 编译情况（2026-04-20）
 - 已恢复 `model/dcn_v2.py` 为原生 `_ext` 依赖（不再使用 Python fallback）。
 - 编译器按本机经验固定为 `gcc-10/g++-10`，在 `LRRU` 环境内编译通过。
@@ -124,6 +161,14 @@
 - 已验证 dry-run 命令：
   - `mamba run -n LRRU python train_apex.py -c train_lrru_dryrun.yml`
   - `mamba run -n LRRU python val.py -c val_lrru_dryrun.yml`
+
+## wandb 与 Git 清理检查（2026-04-21）
+- 已复查 `train_apex.py` 与 `configs/config.py`：
+  - 默认设置 `wandb_disable_code: True`，启动时会导出 `WANDB_DISABLE_CODE=true`。
+  - 默认设置 `backup_source_code: False`，训练不会再自动执行整仓库 `backup_source_code(...)`。
+- 已复查 `.gitignore`：当前会忽略 `wandb/`、`run_logs/`、`pretrained/`、`backup_code/`、`events.out.tfevents.*`、`*.log`、`*.pt`、`*.pth` 等实验产物。
+- 已用 `git ls-files` 复查：目前没有已被 Git 跟踪的权重、日志、`wandb` 离线目录或评测产物会随本次推送进入远程仓库。
+- 结论：当前代码状态下，不会再因为反复备份源码把磁盘持续吃满；当前 Git 状态下，也不会把常见训练产物误推到远程。
 
 ## 距离真实项目跑起来还差什么
 - 目前已具备：环境、依赖、DCNv2 编译、真实 KITTI 数据链接、预训练权重验证流程。

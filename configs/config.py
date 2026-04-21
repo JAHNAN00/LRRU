@@ -138,6 +138,8 @@ cfg.vis_step = 10
 cfg.num_summary = 4
 cfg.record_by_wandb_online = True
 cfg.test_record_by_wandb_online = True
+cfg.wandb_disable_code = True
+cfg.backup_source_code = False
 
 cfg.ben_online_loss=True
 cfg.ben_online_metric=True
