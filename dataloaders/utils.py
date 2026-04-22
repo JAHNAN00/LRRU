@@ -2,9 +2,11 @@ import os
 import cv2
 import torch
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageFile
 
 import torchvision.transforms.functional as TF
+
+ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 # Full kernels
 FULL_KERNEL_3 = np.ones((3, 3), np.uint8)

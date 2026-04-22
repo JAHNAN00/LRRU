@@ -131,6 +131,15 @@ class Summary(BaseSummary):
 
     def save(self, epoch, idx, sample, output):
         with torch.no_grad():
+            pred_key = self.args.output if hasattr(self.args, 'output') else ''
+            pred_list = output.get(pred_key) if pred_key else None
+            if pred_list is None:
+                pred_list = output.get('results')
+            if pred_list is None:
+                pred_list = next((val for val in output.values() if isinstance(val, (list, tuple)) and len(val) != 0), None)
+            if pred_list is None:
+                raise KeyError('No prediction tensor found in model output')
+
             if self.args.save_result_only:
                 if not self.args.test:
                     self.path_output = '{}/{}/epoch{:04d}'.format(self.log_dir,
@@ -143,7 +152,7 @@ class Summary(BaseSummary):
 
                 path_save_pred = '{}/{:010d}.png'.format(self.path_output, idx)
 
-                pred = output[self.args.output][-1].detach()
+                pred = pred_list[-1].detach()
 
                 pred = torch.clamp(pred, min=0)
 
@@ -163,7 +172,7 @@ class Summary(BaseSummary):
                 rgb = sample['rgb'].data.cpu().numpy()
                 dep = sample['dep'].detach().data.cpu().numpy()
                 gt = sample['dep'].detach().data.cpu().numpy()
-                pred = output['results'][-1].detach().data.cpu().numpy()
+                pred = pred_list[-1].detach().data.cpu().numpy()
 
                 num_summary = gt.shape[0]
                 if num_summary > self.args.num_summary:
@@ -241,7 +250,6 @@ class Summary(BaseSummary):
                     path_save = '{}/depth_analy/{}'.format(self.path_output, '{}.jpg'.format(idx))
                     pred_tmp.save('{}/depth_rgb/{}'.format(self.path_output, '{}.jpg'.format(idx)))
                 img_total.save(path_save)
-
 
 
 
