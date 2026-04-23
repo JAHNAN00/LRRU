@@ -170,6 +170,33 @@
 - 已用 `git ls-files` 复查：目前没有已被 Git 跟踪的权重、日志、`wandb` 离线目录或评测产物会随本次推送进入远程仓库。
 - 结论：当前代码状态下，不会再因为反复备份源码把磁盘持续吃满；当前 Git 状态下，也不会把常见训练产物误推到远程。
 
+## Mini 5-epoch 从头训练结果（2026-04-23）
+- 配置：`configs/train_lrru_mini_5epoch_kitti.yml`
+- 运行目录：`wandb/offline-run-20260423_000346-v33myi2o`
+- 状态：已完整跑完，`run_logs/mini_5epoch_watch.status` 显示 `finished exit_code=0`
+- 训练中为避免再次中断，已修复两处代码问题：
+  - `summary/summary.py`
+    - 当 `args.output` 为空或 key 不存在时，验证结果保存会自动回退到 `output['results']` 或第一个非空输出，不再因 `KeyError: ''` 中断。
+    - `update()` 现在稳定返回当前 `RMSE/MAE`，不再因 `online_rmse_only=True` 使返回值为 `None`。
+  - `train_apex.py`
+    - 验证阶段保存预测图像若失败，只打印 warning，不再打断主训练流程。
+    - best metric 比较前增加 `None` 保护。
+- 每个 epoch 的验证结果：
+  - epoch 1：`RMSE=1038.2 mm`，`MAE=276.0 mm`，`iRMSE=3.4`，`iMAE=1.1`
+  - epoch 2：`RMSE=968.6 mm`，`MAE=251.4 mm`，`iRMSE=3.0`，`iMAE=1.1`
+  - epoch 3：`RMSE=929.3 mm`，`MAE=244.9 mm`，`iRMSE=2.9`，`iMAE=1.1`
+  - epoch 4：`RMSE=931.8 mm`，`MAE=243.4 mm`，`iRMSE=2.9`，`iMAE=1.0`
+  - epoch 5：`RMSE=942.2 mm`，`MAE=247.0 mm`，`iRMSE=3.0`，`iMAE=1.0`
+- 最佳 checkpoint：
+  - `best_rmse_model.pt`：`epoch=3`，最佳 `RMSE=929.3 mm`
+  - `best_mae_model.pt`：`epoch=4`，最佳 `MAE=243.4 mm`
+  - `latest_model.pt`：`epoch=5`
+- 与 README/论文中的 `LRRU-Mini` 预训练结果对比：
+  - 论文/README：`RMSE=806.3 mm`，`MAE=210.0 mm`，`iRMSE=2.3`，`iMAE=0.9`
+  - 本次 5-epoch 从头训练最佳：`RMSE=929.3 mm`，`MAE=243.4 mm`，`iRMSE=2.9`，`iMAE=1.0`
+  - 差距：`RMSE +123.0 mm`，`MAE +33.4 mm`，`iRMSE +0.6`，`iMAE +0.1`
+  - 结论：训练链路已稳定可用，但 5 个 epoch 仍远不足以接近论文最终精度；模型已明显收敛，后续应直接从 `latest_model.pt` 续跑更多 epoch。
+
 ## 距离真实项目跑起来还差什么
 - 目前已具备：环境、依赖、DCNv2 编译、真实 KITTI 数据链接、预训练权重验证流程。
 - 当前可直接执行：

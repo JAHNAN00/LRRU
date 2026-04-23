@@ -361,31 +361,26 @@ def train(gpu, args):
 
                 # SAVE CHECKPOINT
                 if gpu == 0:
-                    writer_val.save(epoch, batch + 1, sample_val, output_val)
+                    state = {
+                        'net': net.module.state_dict(),
+                        'optimizer': optimizer.state_dict(),
+                        'scheduler': scheduler.state_dict(),
+                        'amp': amp.state_dict() if USE_APEX else (scaler.state_dict() if USE_NATIVE_AMP else {}),
+                        'epoch': epoch,
+                        'log_itr': log_itr,
+                        'args': args
+                    }
 
-                    if val_metric_rmse < best_metric_rmse:
+                    try:
+                        writer_val.save(epoch, batch + 1, sample_val, output_val)
+                    except Exception as err:
+                        print('=> Warning: failed to save validation outputs: {}'.format(err))
+
+                    if val_metric_rmse is not None and val_metric_rmse < best_metric_rmse:
                         best_metric_rmse = val_metric_rmse
-                        state = {
-                            'net': net.module.state_dict(),
-                            'optimizer': optimizer.state_dict(),
-                            'scheduler': scheduler.state_dict(),
-                            'amp': amp.state_dict() if USE_APEX else (scaler.state_dict() if USE_NATIVE_AMP else {}),
-                            'epoch': epoch,
-                            'log_itr': log_itr,
-                            'args': args
-                        }
                         torch.save(state, '{}/best_rmse_model.pt'.format(args.save_dir))
-                    if val_metric_mae < best_metric_mae:
+                    if val_metric_mae is not None and val_metric_mae < best_metric_mae:
                         best_metric_mae = val_metric_mae
-                        state = {
-                            'net': net.module.state_dict(),
-                            'optimizer': optimizer.state_dict(),
-                            'scheduler': scheduler.state_dict(),
-                            'amp': amp.state_dict() if USE_APEX else (scaler.state_dict() if USE_NATIVE_AMP else {}),
-                            'epoch': epoch,
-                            'log_itr': log_itr,
-                            'args': args
-                        }
                         torch.save(state, '{}/best_mae_model.pt'.format(args.save_dir))
                     log_val += 1
                 torch.set_grad_enabled(True)

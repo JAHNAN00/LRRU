@@ -48,8 +48,9 @@ class Summary(BaseSummary):
         """
         update results
         """
-        global log_metric_val, log_metric_val_rmse, log_metric_val_mae
         log_dict = {}
+        current_metric_rmse = None
+        current_metric_mae = None
         if self.loss_name is not None:
             self.loss = np.concatenate(self.loss, axis=0)
             self.loss = np.mean(self.loss, axis=0, keepdims=True)
@@ -80,18 +81,15 @@ class Summary(BaseSummary):
             msg = [" {:<9s}|  ".format(self.mode + '_Metric')]
             for idx, name in enumerate(self.metric_name):
                 val = self.metric[0, idx]
+                if name == 'RMSE':
+                    current_metric_rmse = val
+                elif name == 'MAE':
+                    current_metric_mae = val
                 if online_metric:
                     if online_rmse_only:
                         if name == 'RMSE':
-                            log_metric_val = val
                             log_dict[self.mode + '_' + name] = val
-                        else:
-                            pass
                     else:
-                        if name == 'RMSE':
-                            log_metric_val_rmse = val
-                        elif name == "MAE":
-                            log_metric_val_mae = val
                         log_dict[self.mode + '_' + name] = val
                 self.add_scalar('Metric/' + name, val, global_step)
 
@@ -127,7 +125,7 @@ class Summary(BaseSummary):
         self.loss = []
         self.metric = []
 
-        return log_metric_val_rmse, log_metric_val_mae
+        return current_metric_rmse, current_metric_mae
 
     def save(self, epoch, idx, sample, output):
         with torch.no_grad():
@@ -250,7 +248,6 @@ class Summary(BaseSummary):
                     path_save = '{}/depth_analy/{}'.format(self.path_output, '{}.jpg'.format(idx))
                     pred_tmp.save('{}/depth_rgb/{}'.format(self.path_output, '{}.jpg'.format(idx)))
                 img_total.save(path_save)
-
 
 
 
