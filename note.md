@@ -197,6 +197,39 @@
   - 差距：`RMSE +123.0 mm`，`MAE +33.4 mm`，`iRMSE +0.6`，`iMAE +0.1`
   - 结论：训练链路已稳定可用，但 5 个 epoch 仍远不足以接近论文最终精度；模型已明显收敛，后续应直接从 `latest_model.pt` 续跑更多 epoch。
 
+## Mini 续跑到 20 epoch 结果（2026-04-25）
+- 配置：`configs/train_lrru_mini_20epoch_resume_kitti.yml`
+- 续跑权重：`wandb/offline-run-20260423_000346-v33myi2o/latest_model.pt`
+- 运行目录：`wandb/offline-run-20260423_234632-v33myi2o`
+- 状态：已完整跑完到 `epoch 20`，`run_logs/mini_20epoch_resume_watch.status` 显示 `finished exit_code=0`
+- 最佳 checkpoint：
+  - `best_rmse_model.pt`：`epoch=17`，最佳 `RMSE=868.8 mm`
+  - `best_mae_model.pt`：`epoch=17`，最佳 `MAE=224.1 mm`
+  - `latest_model.pt`：`epoch=20`
+- 结论：从 5 epoch 继续到 20 epoch 后，指标显著改善，但与论文结果仍有稳定差距，后续更适合从最佳 RMSE 权重继续续跑，而不是从最后一个 epoch 继续。
+
+## Mini 从 best_rmse 续跑到 37 epoch 结果（2026-04-28）
+- 配置：`configs/train_lrru_mini_37epoch_best_resume_kitti.yml`
+- 续跑权重：`wandb/offline-run-20260423_234632-v33myi2o/best_rmse_model.pt`
+- 运行目录：`wandb/offline-run-20260426_020946-mini-best-rmse-37epoch`
+- 状态：已完整跑完到 `epoch 37`，`run_logs/mini_37epoch_best_resume_watch.status` 显示 `finished exit_code=0`
+- 说明：本轮从 `epoch 17` 的最佳 RMSE checkpoint 继续，实际续跑范围为 `epoch 18 ~ 37`
+- 关键验证节点：
+  - `epoch 23`：`RMSE=853.2 mm`，`MAE=221.8 mm`
+  - `epoch 28`：`RMSE=845.5 mm`，`MAE=218.4 mm`
+  - `epoch 30`：`RMSE=842.6 mm`，`MAE=216.6 mm`
+  - `epoch 33`：`RMSE=830.4 mm`，`MAE=215.0 mm`
+  - `epoch 37`：`RMSE=830.2 mm`，`MAE=216.1 mm`
+- 最佳 checkpoint：
+  - `best_rmse_model.pt`：`epoch=37`，最佳 `RMSE=830.2 mm`
+  - `best_mae_model.pt`：`epoch=33`，最佳 `MAE=215.0 mm`
+  - `latest_model.pt`：`epoch=37`
+- 与 README/论文中的 `LRRU-Mini` 预训练结果对比：
+  - 论文/README：`RMSE=806.3 mm`，`MAE=210.0 mm`，`iRMSE=2.3`，`iMAE=0.9`
+  - 本次 37-epoch 最佳：`RMSE=830.2 mm`，`MAE=215.0 mm`，`iRMSE=2.4`，`iMAE=0.9`
+  - 差距：`RMSE +23.9 mm`，`MAE +5.0 mm`，`iRMSE +0.1`，`iMAE +0.0`
+- 结论：从最佳 RMSE 权重续跑是有效策略，模型已非常接近论文指标；继续训练的边际收益已经显著减小，本轮结束后停止继续扩展 epoch 是合理选择。
+
 ## 距离真实项目跑起来还差什么
 - 目前已具备：环境、依赖、DCNv2 编译、真实 KITTI 数据链接、预训练权重验证流程。
 - 当前可直接执行：
